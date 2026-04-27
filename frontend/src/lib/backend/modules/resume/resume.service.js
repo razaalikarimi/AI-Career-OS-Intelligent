@@ -1,6 +1,6 @@
 const resumeRepository = require('./resume.repository');
-const aiService = require('../ai/ai.service');
-const logger = require('../../shared/logger');
+const aiService = require('@/lib/backend/modules/ai/ai.service');
+const logger = require('@/lib/backend/shared/logger');
 const pdf = require('pdf-parse');
 
 class ResumeService {

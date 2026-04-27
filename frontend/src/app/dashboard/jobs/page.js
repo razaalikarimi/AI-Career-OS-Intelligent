@@ -1,20 +1,23 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { Briefcase, MapPin, DollarSign, Zap, ExternalLink, RefreshCw, AlertCircle } from 'lucide-react';
+import { Briefcase, MapPin, DollarSign, Zap, ExternalLink, RefreshCw, AlertCircle, Search, Globe, ChevronRight } from 'lucide-react';
 
 export default function JobMatching() {
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [location, setLocation] = useState('India');
 
     useEffect(() => {
         fetchJobs();
     }, []);
 
-    const fetchJobs = async () => {
+    const fetchJobs = async (q = '', loc = '') => {
         try {
             setLoading(true);
-            const res = await fetch('/api/v1/jobs');
+            const url = q ? `/api/v1/jobs?q=${encodeURIComponent(q)}&location=${encodeURIComponent(loc || location)}` : '/api/v1/jobs';
+            const res = await fetch(url);
             const json = await res.json();
             if (json.status === 'success') {
                 setJobs(json.data);
@@ -28,85 +31,113 @@ export default function JobMatching() {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh]">
-                <RefreshCw className="animate-spin text-blue-500 mb-4" size={40} />
-                <p className="text-secondary font-bold">Scanning for opportunities...</p>
-            </div>
-        );
-    }
+    const handleSearch = (e) => {
+        e.preventDefault();
+        fetchJobs(searchQuery, location);
+    };
 
     return (
-        <div className="space-y-8">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h1 className="text-3xl font-bold mb-2">Real-Time Job Feed</h1>
-                    <p className="text-gray-400">Personalized opportunities fetched directly from our global partners.</p>
+        <div className="space-y-12 page-entry">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-8 border-b border-border">
+                <div className="max-w-2xl">
+                    <h1 className="text-3xl font-bold text-primary tracking-tight">Jobs for You</h1>
+                    <p className="text-secondary mt-1 font-medium">Fresh job listings from across the web.</p>
                 </div>
-                {error && (
-                    <div className="flex items-center gap-2 text-red-500 bg-red-50 px-4 py-2 rounded-xl text-sm font-bold border border-red-100">
-                        <AlertCircle size={16} /> {error}
-                    </div>
-                )}
             </div>
 
-            <div className="grid grid-cols-1 gap-6">
-                {jobs.length > 0 ? (
-                    jobs.map((job) => (
-                        <div key={job.id} className="glass-card p-6 flex flex-col md:flex-row gap-6 items-start hover:border-blue-200 transition-all">
-                            <div className="w-16 h-16 bg-blue-50 rounded-xl flex items-center justify-center text-2xl font-black text-blue-600 border border-blue-100 shadow-sm">
-                                {job.company[0]}
-                            </div>
-                            
-                            <div className="flex-1 space-y-4">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-primary">{job.title}</h3>
-                                        <div className="flex flex-wrap gap-4 mt-1 text-sm text-secondary">
-                                            <span className="flex items-center gap-1"><Briefcase size={14} /> {job.company}</span>
-                                            <span className="flex items-center gap-1"><MapPin size={14} /> {job.location}</span>
-                                            <span className="flex items-center gap-1"><DollarSign size={14} /> {job.salary_range}</span>
+            {/* Simple Search Bar */}
+            <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
+                <div className="flex-1 flex items-center gap-3 px-4 py-2.5 bg-white border border-border rounded-lg shadow-sm focus-within:border-primary transition-colors">
+                    <Search className="text-neutral-400" size={18} />
+                    <input 
+                        type="text" 
+                        placeholder="What job are you looking for?" 
+                        className="w-full bg-transparent outline-none text-sm font-medium text-primary placeholder:text-neutral-400"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
+                <div className="w-full md:w-64 flex items-center gap-3 px-4 py-2.5 bg-white border border-border rounded-lg shadow-sm focus-within:border-primary transition-colors">
+                    <Globe className="text-neutral-400" size={18} />
+                    <input 
+                        type="text" 
+                        placeholder="City or Country" 
+                        className="w-full bg-transparent outline-none text-sm font-medium text-primary placeholder:text-neutral-400"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                    />
+                </div>
+                <button 
+                    type="submit"
+                    className="bg-primary text-white px-10 py-2.5 rounded-lg font-semibold hover:bg-neutral-800 transition-all shadow-sm"
+                >
+                    Search
+                </button>
+            </form>
+
+            {error && (
+                <div className="flex items-center gap-3 text-red-600 bg-red-50 p-4 rounded-lg border border-red-100">
+                    <AlertCircle size={18} />
+                    <span className="text-sm font-semibold">{error}</span>
+                </div>
+            )}
+
+            <div className="glass-card overflow-hidden">
+                {loading ? (
+                    <div className="flex flex-col items-center justify-center py-24">
+                        <RefreshCw className="animate-spin text-neutral-400 mb-4" size={32} />
+                        <p className="text-secondary font-semibold text-xs uppercase tracking-widest">Looking for jobs...</p>
+                    </div>
+                ) : jobs.length > 0 ? (
+                    <div className="divide-y divide-border">
+                        {jobs.map((job) => (
+                            <div key={job.id} className="p-8 flex flex-col md:flex-row gap-8 items-start hover:bg-neutral-50 transition-all group cursor-pointer">
+                                <div className="w-14 h-14 bg-neutral-100 rounded-lg flex items-center justify-center text-xl font-bold text-neutral-500 border border-border">
+                                    {job.company[0]}
+                                </div>
+                                
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="min-w-0 pr-4">
+                                            <h3 className="text-xl font-bold text-primary truncate group-hover:text-blue-600 transition-colors">{job.title}</h3>
+                                            <p className="text-sm font-semibold text-secondary mt-1">{job.company}</p>
+                                        </div>
+                                        <div className="text-right flex-shrink-0">
+                                            <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded border border-neutral-200 uppercase tracking-widest">
+                                                {job.source || 'Verified'}
+                                            </span>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-2xl font-black text-blue-600">
-                                            {Math.floor(Math.random() * 15) + 80}%
-                                        </div>
-                                        <p className="text-[10px] uppercase font-bold text-secondary tracking-tighter">Match Score</p>
+
+                                    <div className="flex flex-wrap gap-x-6 gap-y-2 mt-4 text-sm font-medium text-secondary">
+                                        <span className="flex items-center gap-2"><MapPin size={16} className="text-neutral-400" /> {job.location}</span>
+                                        <span className="flex items-center gap-2"><DollarSign size={16} className="text-neutral-400" /> {job.salary_range}</span>
+                                        <span className="flex items-center gap-2"><Briefcase size={16} className="text-neutral-400" /> {job.type || 'Full-time'}</span>
                                     </div>
                                 </div>
 
-                                <p className="text-secondary text-sm line-clamp-2">
-                                    {job.description || "Exciting opportunity to join a fast-growing team and build innovative solutions using modern technologies."}
-                                </p>
-
-                                <div className="flex flex-wrap gap-2">
-                                    {["Remote", job.type || "Full-time", "Senior"].map(tag => (
-                                        <span key={tag} className="px-3 py-1 bg-slate-50 rounded-full text-[10px] font-bold text-secondary border border-slate-100 uppercase tracking-wider">{tag}</span>
-                                    ))}
+                                <div className="flex flex-col gap-3 w-full md:w-auto">
+                                    <a 
+                                        href={job.url || "#"} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="bg-primary text-white px-6 py-2.5 rounded-lg font-bold text-xs flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all no-underline"
+                                    >
+                                        Apply Now <ChevronRight size={14} />
+                                    </a>
                                 </div>
                             </div>
-
-                            <div className="flex flex-col gap-2 w-full md:w-auto">
-                                <button className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
-                                    Apply Now <Zap size={14} />
-                                </button>
-                                <button className="bg-white text-secondary border border-slate-200 py-3 px-6 rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-slate-50 transition-all">
-                                    Details <ExternalLink size={14} />
-                                </button>
-                            </div>
-                        </div>
-                    ))
+                        ))}
+                    </div>
                 ) : (
-                    <div className="flex flex-col items-center justify-center py-20 glass-card text-center">
-                        <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
-                            <Briefcase size={40} className="text-slate-300" />
+                    <div className="flex flex-col items-center justify-center py-32 text-center">
+                        <div className="w-16 h-16 bg-neutral-50 rounded-full flex items-center justify-center mb-6">
+                            <Search size={32} className="text-neutral-300" />
                         </div>
-                        <h3 className="text-xl font-bold text-primary mb-2">No Active Matches Found</h3>
-                        <p className="text-secondary mb-8 max-w-sm">We couldn't find any jobs in your database. Use our seed script or connect a job board API to populate this feed.</p>
-                        <button onClick={fetchJobs} className="text-blue-600 font-bold flex items-center gap-2 hover:underline">
-                            <RefreshCw size={16} /> Refresh Feed
+                        <h3 className="text-lg font-bold text-primary mb-1">No jobs found</h3>
+                        <p className="text-secondary text-sm mb-8 max-w-sm font-medium">Try searching for a different job title or city.</p>
+                        <button onClick={() => fetchJobs(searchQuery)} className="bg-primary text-white px-8 py-2.5 rounded-lg font-semibold">
+                             Clear search
                         </button>
                     </div>
                 )}

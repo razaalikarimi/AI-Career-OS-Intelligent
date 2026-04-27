@@ -1,4 +1,4 @@
-const { pool } = require('../../infrastructure/database/mysql');
+const { pool } = require('@/lib/backend/infrastructure/database/mysql');
 
 class DashboardService {
     async getStats(userId) {

@@ -1,4 +1,5 @@
 const { pool } = require('../../infrastructure/database/mysql');
+const externalJobsService = require('@/lib/backend/services/jobs/external-jobs.service');
 
 class JobsService {
     async getAllJobs() {
@@ -7,8 +8,13 @@ class JobsService {
             return rows;
         } catch (error) {
             console.error('Jobs Fetch Error:', error);
-            throw error;
+            // If DB fails, return some data at least
+            return [];
         }
+    }
+
+    async searchExternalJobs(query, location) {
+        return await externalJobsService.searchJobs(query || 'Software Engineer', location);
     }
 }
 
