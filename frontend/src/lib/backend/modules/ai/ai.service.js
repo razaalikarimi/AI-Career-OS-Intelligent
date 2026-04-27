@@ -1,21 +1,44 @@
 const logger = require('../../shared/logger');
 const { AppError } = require('../../shared/errorHandler');
+const OpenAI = require('openai');
 
 class AIService {
     constructor() {
-        this.provider = process.env.AI_PROVIDER || 'openai';
+        this.apiKey = process.env.OPENAI_API_KEY || process.env.AI_PROVIDER; // Checking both as user might have placed it in AI_PROVIDER
+        this.openai = this.apiKey && this.apiKey.startsWith('sk-') ? new OpenAI({ apiKey: this.apiKey }) : null;
     }
 
     async analyzeResume(text) {
         logger.info('Analyzing resume text with AI...');
         
-        // If real AI is configured, use it here
-        if (process.env.OPENAI_API_KEY) {
-            // Real AI logic would go here
-            logger.info('Real AI Analysis triggered (stub)');
+        if (this.openai) {
+            try {
+                logger.info('Calling Real OpenAI API...');
+                const response = await this.openai.chat.completions.create({
+                    model: "gpt-3.5-turbo",
+                    messages: [
+                        {
+                            role: "system",
+                            content: "You are a professional ATS resume analyzer. Extract data in JSON format: { summary: string, skills: [{name: string, proficiency: number}], experience_years: number, education: string, ats_score: number, recommendations: [string] }"
+                        },
+                        {
+                            role: "user",
+                            content: `Analyze this resume text:\n\n${text}`
+                        }
+                    ],
+                    response_format: { type: "json_object" }
+                });
+
+                const result = JSON.parse(response.choices[0].message.content);
+                logger.info('Real AI Analysis successful');
+                return result;
+            } catch (error) {
+                logger.error('Real OpenAI Analysis failed, falling back to smart mock:', error);
+            }
         }
 
-        // Improved Smart Mock Logic
+        // Improved Smart Mock Logic (Fallback if no API key or API fails)
+        logger.info('Using Smart Mock for analysis...');
         try {
             // Attempt to find experience years in text (e.g., "1 year", "2+ years")
             let experienceYears = 1.0;
@@ -25,21 +48,26 @@ class AIService {
             }
 
             // Simple Skill Extraction Mock
-            const commonSkills = ["JavaScript", "React", "Node.js", "SQL", "Python", "Docker"];
+            const commonSkills = ["JavaScript", "React", "Node.js", "SQL", "Python", "Docker", "Java", "C++", "AWS"];
             const extractedSkills = commonSkills
                 .filter(skill => text.toLowerCase().includes(skill.toLowerCase()))
-                .map(skill => ({ name: skill, proficiency: 4 }));
+                .map(skill => ({ name: skill, proficiency: Math.floor(Math.random() * 2) + 3 }));
 
             if (extractedSkills.length === 0) {
                 extractedSkills.push({ name: "General Engineering", proficiency: 3 });
             }
 
             return {
-                summary: text.length > 50 ? text.substring(0, 150) + "..." : "Professional profile based on uploaded resume.",
+                summary: text.length > 50 ? text.substring(0, 200).replace(/\n/g, ' ') + "..." : "Professional profile based on uploaded resume.",
                 skills: extractedSkills,
                 experience_years: experienceYears,
                 education: text.toLowerCase().includes("bachelor") ? "Bachelor's Degree" : "Professional Certification",
-                ats_score: Math.floor(Math.random() * 20) + 70 // Random score between 70-90
+                ats_score: Math.floor(Math.random() * 20) + 75,
+                recommendations: [
+                    "Add more quantitative achievements (e.g., %, $ values).",
+                    "Strengthen your summary with key technical keywords.",
+                    "Ensure your experience matches the target role requirements."
+                ]
             };
         } catch (error) {
             logger.error('AI Resume Analysis failed:', error);

@@ -9,7 +9,8 @@ import {
   Star,
   RefreshCw,
   Clock,
-  ExternalLink
+  ExternalLink,
+  ChevronRight
 } from 'lucide-react';
 
 export default function DashboardPage() {
