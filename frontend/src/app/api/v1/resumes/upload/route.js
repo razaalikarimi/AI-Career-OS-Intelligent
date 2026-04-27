@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-const resumeService = require('../../../../../lib/backend/modules/resume/resume.service');
+import resumeService from '@/lib/backend/modules/resume/resume.service';
 
 export async function POST(request) {
     try {

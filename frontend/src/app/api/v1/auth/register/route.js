@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-const authService = require('../../../../../lib/backend/modules/auth/auth.service');
+import authService from '@/lib/backend/modules/auth/auth.service';
 
 export async function POST(request) {
     try {

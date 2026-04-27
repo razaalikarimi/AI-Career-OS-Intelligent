@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-const interviewService = require('../../../../../lib/backend/modules/interview/interview.service');
+import interviewService from '@/lib/backend/modules/interview/interview.service';
 
 export async function POST(request) {
     try {
