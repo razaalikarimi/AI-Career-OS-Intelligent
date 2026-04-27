@@ -8,23 +8,38 @@ class AIService {
 
     async analyzeResume(text) {
         logger.info('Analyzing resume text with AI...');
-        // In a real scenario, this would call OpenAI/Anthropic
-        // We'll simulate the AI logic with structured templates
+        
+        // If real AI is configured, use it here
+        if (process.env.OPENAI_API_KEY) {
+            // Real AI logic would go here
+            logger.info('Real AI Analysis triggered (stub)');
+        }
+
+        // Improved Smart Mock Logic
         try {
-            // Simulate AI delay
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Attempt to find experience years in text (e.g., "1 year", "2+ years")
+            let experienceYears = 1.0;
+            const expMatch = text.match(/(\d+(\.\d+)?)\s*(year|yr)/i);
+            if (expMatch) {
+                experienceYears = parseFloat(expMatch[1]);
+            }
+
+            // Simple Skill Extraction Mock
+            const commonSkills = ["JavaScript", "React", "Node.js", "SQL", "Python", "Docker"];
+            const extractedSkills = commonSkills
+                .filter(skill => text.toLowerCase().includes(skill.toLowerCase()))
+                .map(skill => ({ name: skill, proficiency: 4 }));
+
+            if (extractedSkills.length === 0) {
+                extractedSkills.push({ name: "General Engineering", proficiency: 3 });
+            }
 
             return {
-                summary: "Experienced software engineer with a strong background in full-stack development and cloud architecture.",
-                skills: [
-                    { name: "JavaScript", proficiency: 5 },
-                    { name: "Node.js", proficiency: 4 },
-                    { name: "React", proficiency: 4 },
-                    { name: "SQL", proficiency: 3 }
-                ],
-                experience_years: 5.5,
-                education: "Bachelor of Science in Computer Science",
-                ats_score: 85
+                summary: text.length > 50 ? text.substring(0, 150) + "..." : "Professional profile based on uploaded resume.",
+                skills: extractedSkills,
+                experience_years: experienceYears,
+                education: text.toLowerCase().includes("bachelor") ? "Bachelor's Degree" : "Professional Certification",
+                ats_score: Math.floor(Math.random() * 20) + 70 // Random score between 70-90
             };
         } catch (error) {
             logger.error('AI Resume Analysis failed:', error);

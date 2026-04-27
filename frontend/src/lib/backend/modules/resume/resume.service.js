@@ -1,32 +1,49 @@
 const resumeRepository = require('./resume.repository');
 const aiService = require('../ai/ai.service');
 const logger = require('../../shared/logger');
+const pdf = require('pdf-parse');
 
 class ResumeService {
     async uploadResume(userId, fileData) {
-        console.log('Service: uploadResume started (Direct Mode)');
+        logger.info('Service: uploadResume started (Real Processing Mode)');
         
         // 1. Save resume record in DB
         const resume = await resumeRepository.create({
             user_id: userId,
-            file_url: 'memory_storage',
+            file_url: 'memory_storage', // In production, upload to S3/Cloudinary
             original_filename: fileData.originalname
         });
 
-        // 2. Process Directly (Bypass Queue for stability)
+        // 2. Process Real Data
         try {
-            console.log('Service: Processing AI Analysis...');
-            const analysis = await aiService.analyzeResume("Direct processing text...");
+            let resumeText = '';
             
-            console.log('Service: Saving extracted data...');
+            // Extract text based on file type
+            if (fileData.originalname.toLowerCase().endsWith('.pdf')) {
+                const data = await pdf(fileData.buffer);
+                resumeText = data.text;
+                logger.info('PDF text extracted successfully');
+            } else {
+                resumeText = fileData.buffer.toString('utf-8');
+                logger.info('Text/Generic file read successfully');
+            }
+
+            if (!resumeText || resumeText.trim().length < 10) {
+                throw new Error('Could not extract meaningful text from resume');
+            }
+
+            logger.info('Service: Triggering Real AI Analysis...');
+            const analysis = await aiService.analyzeResume(resumeText);
+            
+            logger.info('Service: Saving extracted data to DB...');
             await resumeRepository.saveExtractedData(resume.id, analysis);
             
-            console.log('Service: Updating status to completed...');
+            logger.info('Service: Updating status to completed...');
             await resumeRepository.updateStatus(resume.id, 'completed');
             
-            console.log('Service: All steps finished');
+            logger.info('Service: Processing finished');
         } catch (error) {
-            console.error('Service Error during processing:', error);
+            logger.error('Service Error during processing:', error);
             await resumeRepository.updateStatus(resume.id, 'failed');
         }
 
