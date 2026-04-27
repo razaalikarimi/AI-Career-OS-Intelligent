@@ -1,165 +1,396 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { Mic, Video, Send, User, Cpu, BarChart3, Clock } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Mic, Video, ShieldAlert, Play, StopCircle, MessageSquare, Code, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { useProctoring } from './useProctoring';
 
 export default function InterviewLab() {
-    const [messages, setMessages] = useState([
-        { role: 'ai', content: 'Hello! I am your AI Interviewer. Today we will focus on System Design for a Senior Role. Ready to start?' }
-    ]);
-    const [input, setInput] = useState('');
-    const [isSessionActive, setIsSessionActive] = useState(false);
-    const [timer, setTimer] = useState(0);
+    const [step, setStep] = useState('landing'); // landing, permissions, ongoing, finished
+    const [sessionId, setSessionId] = useState(null);
+    const [currentQuestion, setCurrentQuestion] = useState(null);
+    const [isProctoringActive, setIsProctoringActive] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const [violations, setViolations] = useState([]);
+    const [questionCount, setQuestionCount] = useState(0);
+    const MAX_QUESTIONS = 5;
+    const [isFinishing, setIsFinishing] = useState(false);
+    const [report, setReport] = useState(null);
+    
+    const videoRef = useRef(null);
+    const streamRef = useRef(null);
 
+    // Attach stream when video element is available in 'ongoing' step
     useEffect(() => {
-        let interval;
-        if (isSessionActive) {
-            interval = setInterval(() => setTimer(t => t + 1), 1000);
+        if (step === 'ongoing' && videoRef.current && streamRef.current) {
+            videoRef.current.srcObject = streamRef.current;
         }
-        return () => clearInterval(interval);
-    }, [isSessionActive]);
+    }, [step]);
 
-    const formatTime = (seconds) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    const handleViolation = async (type, severity, metadata = {}) => {
+        const msg = `${type.replace('_', ' ').toUpperCase()} Detected!`;
+        if (!violations.includes(msg)) {
+            setViolations(prev => [msg, ...prev]);
+            // Log to backend
+            if (sessionId) {
+                try {
+                    await fetch(`/api/v1/interviews/sessions/${sessionId}/violation`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ type, severity, metadata: metadata || {} })
+                    });
+                } catch (err) {
+                    console.error('Failed to log violation:', err);
+                }
+            }
+        }
     };
 
-    const handleSend = () => {
-        if (!input.trim()) return;
+    useProctoring(videoRef, sessionId, handleViolation, isProctoringActive);
+
+    // Roles for simulation
+    const roles = [
+        { id: '1', title: 'Senior Frontend Engineer', color: 'bg-blue-50' },
+        { id: '2', title: 'Backend Systems Architect', color: 'bg-indigo-50' },
+        { id: '3', title: 'Full Stack Developer', color: 'bg-emerald-50' }
+    ];
+
+    const startInterview = async (roleId) => {
+        try {
+            const res = await fetch('/api/v1/interviews/sessions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ jobRoleId: roleId })
+            });
+            const result = await res.json();
+            if (result.status === 'success') {
+                setSessionId(result.data.id);
+                setStep('permissions');
+            }
+        } catch (err) {
+            console.error('Failed to start session', err);
+        }
+    };
+
+    const [deviceInfo, setDeviceInfo] = useState(null);
+
+    const analyzeDevice = async () => {
+        const info = {
+            os: navigator.platform,
+            browser: navigator.userAgent,
+            cores: navigator.hardwareConcurrency,
+            memory: navigator.deviceMemory,
+            screenRes: `${window.screen.width}x${window.screen.height}`,
+            isTouch: 'ontouchstart' in window
+        };
+
+        // Detect Virtual Cameras (Simplified check)
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        const hasVirtual = videoDevices.some(d => d.label.toLowerCase().includes('obs') || d.label.toLowerCase().includes('virtual'));
         
-        const newMessages = [...messages, { role: 'user', content: input }];
-        setMessages(newMessages);
-        setInput('');
+        info.videoDevices = videoDevices.length;
+        info.hasVirtualCamera = hasVirtual;
         
-        // Simulate AI response
-        setTimeout(() => {
-            setMessages(prev => [...prev, { 
-                role: 'ai', 
-                content: "That's a solid start. How would you handle state persistence across multiple nodes in this architecture?" 
-            }]);
-        }, 1500);
+        setDeviceInfo(info);
+        if (hasVirtual) {
+            handleViolation('virtual_camera_detected', 'high');
+        }
+        return info;
+    };
+
+    const requestPermissions = async () => {
+        try {
+            const info = await analyzeDevice();
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            streamRef.current = stream;
+            if (videoRef.current) videoRef.current.srcObject = stream;
+            
+            // Log device info to backend
+            if (sessionId) {
+                await fetch(`/api/v1/interviews/sessions/${sessionId}/violation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type: 'device_info', severity: 'low', metadata: info })
+                });
+            }
+
+            setStep('ongoing');
+            beginInterview();
+        } catch (err) {
+            alert('Camera and Microphone access are required for proctoring.');
+        }
+    };
+
+    const beginInterview = async () => {
+        const res = await fetch(`/api/v1/interviews/sessions/${sessionId}/start`, { method: 'POST' });
+        const result = await res.json();
+        setCurrentQuestion(result.data.question);
+        setIsProctoringActive(true);
+    };
+
+    const [isListening, setIsListening] = useState(false);
+    const [answerText, setAnswerText] = useState('');
+
+    const toggleListening = () => {
+        if (isListening) {
+            setIsListening(false);
+            return;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            alert('Speech recognition is not supported in this browser.');
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onresult = (event) => {
+            const transcript = Array.from(event.results)
+                .map(result => result[0])
+                .map(result => result.transcript)
+                .join('');
+            setAnswerText(transcript);
+        };
+
+        recognition.start();
+    };
+
+    const submitAnswer = async () => {
+        setIsUploading(true);
+        const res = await fetch(`/api/v1/interviews/sessions/${sessionId}/answer`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ questionId: 'mock-id', answer: answerText })
+        });
+        
+        if (questionCount + 1 >= MAX_QUESTIONS) {
+            finishInterview();
+        } else {
+            const result = await res.json();
+            setCurrentQuestion(result.data.question);
+            setQuestionCount(prev => prev + 1);
+            setAnswerText('');
+        }
+        setIsUploading(false);
+    };
+
+    const finishInterview = async () => {
+        setIsFinishing(true);
+        setStep('finished');
+        setIsProctoringActive(false);
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+        }
+        
+        // Mocking report fetching for now, but backend worker will process it
+        setTimeout(async () => {
+            setReport({
+                score: 85,
+                technical: 88,
+                communication: 92,
+                confidence: 80,
+                risk: violations.length > 2 ? 'Medium' : 'Low',
+                feedback: "Excellent performance. You demonstrated deep knowledge of microservices and state management. Communication was proactive and structured."
+            });
+            setIsFinishing(false);
+        }, 3000);
     };
 
     return (
-        <div className="h-[calc(100vh-200px)] flex gap-6">
-            {/* Main Interview Area */}
-            <div className="flex-1 glass-card flex flex-col overflow-hidden">
-                <div className="p-4 border-b border-border flex justify-between items-center bg-secondary/50">
-                    <div className="flex items-center gap-4">
-                        <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                        <span className="font-semibold text-sm">Session: System Design (L6)</span>
+        <div className="max-w-6xl mx-auto page-entry">
+            {step === 'landing' && (
+                <div className="space-y-8 text-center py-10">
+                    <div className="max-w-2xl mx-auto">
+                        <h2 className="text-4xl font-black text-primary mb-4 tracking-tight">AI Interview Room</h2>
+                        <p className="text-secondary text-lg">Practice your interviews with AI. Pick a job and start talking!</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2 text-gray-400 text-sm mr-4">
-                            <Clock size={16} /> {formatTime(timer)}
-                        </div>
-                        <button className="p-2 hover:bg-border rounded-lg"><Video size={18} /></button>
-                        <button className="p-2 hover:bg-border rounded-lg"><Mic size={18} /></button>
+
+                    <div className="grid md:grid-cols-3 gap-6 pt-10">
+                        {roles.map(role => (
+                            <div key={role.id} className="glass-card p-8 group cursor-pointer hover:border-accent transition-all">
+                                <div className={`w-16 h-16 ${role.color} rounded-2xl flex items-center justify-center mx-auto mb-6`}>
+                                    <MessageSquare className="text-accent" size={32} />
+                                </div>
+                                <h3 className="font-bold text-primary mb-2">{role.title}</h3>
+                                <p className="text-xs text-secondary mb-8">HR + Technical + DSA</p>
+                                <button 
+                                    onClick={() => startInterview(role.id)}
+                                    className="w-full btn-primary py-3"
+                                >
+                                    Start Session
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 </div>
+            )}
 
-                {/* Chat Area */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                    {messages.map((msg, i) => (
-                        <div key={i} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                            <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                                msg.role === 'ai' ? 'bg-primary/20 text-primary' : 'bg-secondary text-gray-400'
-                            }`}>
-                                {msg.role === 'ai' ? <Cpu size={20} /> : <User size={20} />}
-                            </div>
-                            <div className={`max-w-[70%] p-4 rounded-2xl text-sm leading-relaxed ${
-                                msg.role === 'ai' ? 'bg-secondary/50 rounded-tl-none' : 'bg-primary text-white rounded-tr-none'
-                            }`}>
-                                {msg.content}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Input Area */}
-                <div className="p-6 border-t border-border bg-secondary/20">
-                    <div className="relative">
-                        <textarea 
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-                            placeholder="Type your response here..."
-                            className="w-full bg-background border border-border rounded-xl p-4 pr-16 focus:outline-none focus:border-primary transition-all resize-none min-h-[100px]"
-                        />
-                        <button 
-                            onClick={handleSend}
-                            className="absolute bottom-4 right-4 p-2 bg-primary rounded-lg hover:brightness-110 transition-all"
-                        >
-                            <Send size={18} />
-                        </button>
-                    </div>
-                    <p className="text-[10px] text-gray-500 mt-2 text-center uppercase tracking-widest">
-                        AI is listening and evaluating your performance in real-time
+            {step === 'permissions' && (
+                <div className="glass-card max-w-xl mx-auto p-12 text-center">
+                    <ShieldAlert size={64} className="text-accent mx-auto mb-8 animate-pulse" />
+                    <h3 className="text-2xl font-black text-primary mb-4">Wait! One Last Step</h3>
+                    <p className="text-secondary mb-10 leading-relaxed">
+                        We need to see and hear you for the interview. 
+                        Our AI will also check for phones or extra help.
                     </p>
+                    <button 
+                        onClick={requestPermissions}
+                        className="btn-primary w-full py-4"
+                    >
+                        Allow Camera & Mic
+                    </button>
                 </div>
-            </div>
+            )}
 
-            {/* Side Analytics Panel */}
-            <div className="w-80 flex flex-col gap-6">
-                <div className="glass-card p-6">
-                    {!isSessionActive ? (
-                        <div className="text-center">
-                            <h3 className="font-bold mb-4">Start Session</h3>
-                            <button 
-                                onClick={() => setIsSessionActive(true)}
-                                className="btn-primary w-full"
-                            >
-                                Begin Mock Interview
-                            </button>
-                        </div>
-                    ) : (
-                        <div>
-                            <h3 className="font-bold mb-6 flex items-center gap-2">
-                                <BarChart3 size={18} className="text-primary" /> Live Feedback
-                            </h3>
-                            <div className="space-y-6">
-                                <Metric label="Clarity" value={85} color="bg-accent" />
-                                <Metric label="Technical Depth" value={70} color="bg-primary" />
-                                <Metric label="Confidence" value={92} color="bg-yellow-500" />
-                                <Metric label="Pacing" value={60} color="bg-blue-500" />
+            {step === 'ongoing' && (
+                <div className="grid grid-cols-12 gap-8 h-[700px]">
+                    {/* Left: Question & Interaction */}
+                    <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+                        <div className="glass-card flex-1 p-10 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4">
+                                <div className="flex items-center gap-2 bg-red-50 text-red-600 px-3 py-1 rounded-full text-[10px] font-black uppercase border border-red-100">
+                                    <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+                                    Live Proctoring
+                                </div>
                             </div>
-                            
-                            <div className="mt-8 pt-8 border-t border-border">
-                                <h4 className="text-xs font-bold text-gray-500 uppercase mb-4">AI Observations</h4>
-                                <div className="space-y-3">
-                                    <div className="text-xs bg-accent/10 text-accent p-2 rounded border border-accent/20">
-                                        ✓ Good use of "Scalability" keywords.
-                                    </div>
-                                    <div className="text-xs bg-yellow-500/10 text-yellow-500 p-2 rounded border border-yellow-500/20">
-                                        ⚠ You could explain the "Why" behind using Redis.
+
+                            <div className="h-full flex flex-col justify-center">
+                                <div className="flex justify-between items-center mb-6">
+                                    <span className="text-accent font-black uppercase tracking-widest text-xs">AI Interviewer</span>
+                                    <span className="text-secondary font-black text-xs uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-lg">Question {questionCount + 1} / {MAX_QUESTIONS}</span>
+                                </div>
+                                <h3 className="text-2xl font-bold text-primary leading-snug">
+                                    {currentQuestion || "Preparing your first question..."}
+                                </h3>
+                                
+                                <div className="mt-12 space-y-4">
+                                    <textarea 
+                                        className="w-full bg-slate-50 border border-border rounded-2xl p-6 h-40 focus:outline-none focus:ring-2 focus:ring-accent/20 transition-all font-medium text-primary"
+                                        placeholder="Type your response here or use voice input..."
+                                        value={answerText}
+                                        onChange={(e) => setAnswerText(e.target.value)}
+                                    ></textarea>
+                                    <div className="flex gap-4">
+                                        <button 
+                                            onClick={submitAnswer}
+                                            disabled={isUploading || !answerText}
+                                            className="flex-1 btn-primary py-4 disabled:opacity-50"
+                                        >
+                                            {isUploading ? <Loader2 className="animate-spin" /> : 'Submit Answer'}
+                                        </button>
+                                        <button 
+                                            onClick={toggleListening}
+                                            className={`p-4 rounded-2xl transition-all ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-100 text-primary hover:bg-slate-200'}`}
+                                        >
+                                            <Mic size={24} />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    )}
-                </div>
+                    </div>
 
-                <div className="glass-card p-6 mt-auto">
-                    <h3 className="text-sm font-bold mb-2">Pro Tip</h3>
-                    <p className="text-xs text-gray-400">
-                        In System Design interviews, always start with high-level requirements before diving into database schemas.
-                    </p>
-                </div>
-            </div>
-        </div>
-    );
-}
+                    {/* Right: Camera & Proctoring Logs */}
+                    <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+                        <div className="glass-card aspect-video relative overflow-hidden bg-slate-900 border-none rounded-3xl">
+                                <video 
+                                    ref={videoRef} 
+                                    autoPlay 
+                                    playsInline 
+                                    muted 
+                                    className="w-full h-full object-cover"
+                                />
+                            <div className="absolute inset-0 border-[20px] border-transparent pointer-events-none border-t-white/10 border-l-white/10"></div>
+                            {/* Face Mesh Simulation Overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center opacity-30 pointer-events-none">
+                                <div className="w-48 h-64 border border-accent rounded-full border-dashed animate-pulse"></div>
+                            </div>
+                        </div>
 
-function Metric({ label, value, color }) {
-    return (
-        <div className="space-y-2">
-            <div className="flex justify-between items-center text-xs">
-                <span className="text-gray-400">{label}</span>
-                <span className="font-bold">{value}%</span>
-            </div>
-            <div className="w-full h-1 bg-border rounded-full overflow-hidden">
-                <div className={`h-full ${color} transition-all duration-500`} style={{ width: `${value}%` }} />
-            </div>
+                        <div className="glass-card flex-1 p-6 overflow-y-auto">
+                            <h4 className="text-xs font-black text-secondary uppercase tracking-widest mb-6 flex items-center justify-between">
+                                Security Feed
+                                <span className="text-green-500">Secure</span>
+                            </h4>
+                            <div className="space-y-4">
+                                {violations.length === 0 ? (
+                                    <div className="flex items-center gap-3 text-xs font-bold text-slate-400 p-4 bg-slate-50 rounded-xl">
+                                        <CheckCircle size={16} className="text-green-500" />
+                                        No violations detected.
+                                    </div>
+                                ) : (
+                                    violations.map((v, i) => (
+                                        <div key={i} className="flex items-center gap-3 text-xs font-bold text-red-600 p-4 bg-red-50 rounded-xl border border-red-100">
+                                            <AlertTriangle size={16} />
+                                            {v}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {step === 'finished' && (
+                <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in zoom-in duration-700">
+                    <div className="glass-card p-10 text-center bg-gradient-to-br from-white to-blue-50">
+                        {isFinishing ? (
+                            <div className="py-20 flex flex-col items-center">
+                                <Loader2 className="animate-spin text-accent mb-6" size={48} />
+                                <h3 className="text-2xl font-black text-primary mb-2">Generating Neural Report...</h3>
+                                <p className="text-secondary">Our AI is analyzing your performance and proctoring data.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-10">
+                                <div>
+                                    <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6 border border-green-100">
+                                        <CheckCircle className="text-green-500" size={40} />
+                                    </div>
+                                    <h3 className="text-4xl font-black text-primary tracking-tight">Interview Completed</h3>
+                                    <p className="text-secondary mt-2 font-medium">Your evaluation is ready for review.</p>
+                                </div>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    {[
+                                        { label: 'Overall Score', val: `${report.score}%`, color: 'text-blue-600' },
+                                        { label: 'Technical', val: `${report.technical}%`, color: 'text-indigo-600' },
+                                        { label: 'Communication', val: `${report.communication}%`, color: 'text-emerald-600' },
+                                        { label: 'Proctoring Risk', val: report.risk, color: report.risk === 'Low' ? 'text-green-600' : 'text-amber-600' }
+                                    ].map(stat => (
+                                        <div key={stat.label} className="bg-white p-6 rounded-2xl border border-border shadow-sm">
+                                            <p className="text-[10px] font-black text-secondary uppercase tracking-widest mb-1">{stat.label}</p>
+                                            <p className={`text-2xl font-black ${stat.color}`}>{stat.val}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="text-left p-8 bg-slate-50 rounded-2xl border border-slate-100">
+                                    <h4 className="text-sm font-black text-primary uppercase tracking-widest mb-4">AI Deep Feedback</h4>
+                                    <p className="text-primary leading-relaxed font-medium">
+                                        "{report.feedback}"
+                                    </p>
+                                </div>
+
+                                <div className="flex gap-4">
+                                    <button 
+                                        onClick={() => setStep('landing')}
+                                        className="flex-1 btn-primary py-4"
+                                    >
+                                        Back to Dashboard
+                                    </button>
+                                    <button className="flex-1 bg-white border border-border text-primary font-bold py-4 rounded-xl hover:bg-slate-50 transition-all">
+                                        Download PDF Report
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

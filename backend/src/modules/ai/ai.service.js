@@ -41,12 +41,40 @@ class AIService {
         ];
     }
 
+    async generateInterviewQuestion(roleId, previousAnswer = null) {
+        logger.info('Generating AI interview question...');
+        // In production, this would use the prompt:
+        // "Based on role ${roleId} and candidate's last answer ${previousAnswer}, ask the next relevant technical or HR question."
+        
+        const questions = [
+            "Tell me about a challenging technical problem you solved recently.",
+            "How do you handle state management in a large-scale React application?",
+            "What is your approach to optimizing slow database queries?",
+            "Explain the difference between optimistic and pessimistic locking.",
+            "How do you ensure security in a distributed microservices architecture?"
+        ];
+        
+        return questions[Math.floor(Math.random() * questions.length)];
+    }
+
     async evaluateInterviewResponse(question, answer) {
         logger.info('Evaluating interview response...');
         return {
             score: 8,
             feedback: "Great explanation of the CAP theorem, but could have used more real-world examples.",
             suggestion: "Try to mention specific trade-offs you've made in past projects."
+        };
+    }
+
+    async generateFinalInterviewReport(data) {
+        logger.info('Generating final AI interview report...');
+        // Simulate complex AI analysis
+        return {
+            technical_score: 85,
+            communication_score: 90,
+            confidence_score: 80,
+            risk_score: 5, // Based on violations
+            feedback: "The candidate showed strong proficiency in React and System Design. Communication was clear, though some hesitation was noted on database sharding questions. No significant proctoring violations detected."
         };
     }
 }

@@ -20,6 +20,7 @@ const { testConnection } = require('./infrastructure/database/mysql');
 
 const authRoutes = require('./api/auth.routes');
 const resumeRoutes = require('./api/resume.routes');
+const interviewRoutes = require('./api/interview.routes');
 const apiLimiter = require('./shared/rateLimiter');
 
 const app = express();
@@ -40,6 +41,7 @@ app.use('/api', apiLimiter);
 // Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/resumes', resumeRoutes);
+app.use('/api/v1/interviews', interviewRoutes);
 app.get('/', (req, res) => res.status(200).json({ status: 'API is running', version: '1.0.0' }));
 
 // Real-time

@@ -1,22 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  --color-background: #FFFFFF; /* Pure White Background */
+  --color-background: #FFFFFF;
   --color-foreground: #0F172A;
   
-  --color-primary: #1E293B; /* Deep Navy for text */
-  --color-secondary: #64748B; /* Slate Gray for secondary text */
-  --color-accent: #3B82F6; /* Brighter Professional Blue */
+  --color-primary: #1E293B;
+  --color-secondary: #64748B;
+  --color-accent: #3B82F6;
   
   --color-border: #F1F5F9;
-  --color-surface: #F8FAFC; /* Light gray for cards background */
+  --color-surface: #F8FAFC;
   
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  
+  /* Custom Shadows */
+  --shadow-soft: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-premium: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 20px 25px -5px rgba(0, 0, 0, 0.03);
 }
 
 @layer base {
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv05", "cv11";
   }
   
   h1, h2, h3, h4, h5, h6 {
@@ -26,18 +31,28 @@
 
 @layer components {
   .glass-card {
-    @apply bg-white border border-border rounded-2xl shadow-[0_1px_3px_0_rgba(0,0,0,0.02),0_1px_2px_0_rgba(0,0,0,0.06)] hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300;
+    @apply bg-white border border-border rounded-2xl shadow-soft hover:shadow-premium transition-all duration-500 ease-out;
   }
   
   .btn-primary {
-    @apply bg-accent text-white px-6 py-2.5 rounded-xl font-bold hover:bg-blue-600 transition-all active:scale-95 flex items-center justify-center shadow-lg shadow-blue-500/20;
+    @apply bg-accent text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition-all active:scale-[0.98] flex items-center justify-center shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40;
   }
   
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-secondary hover:text-accent hover:bg-blue-50 transition-all font-medium;
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-secondary hover:text-accent hover:bg-blue-50/50 transition-all font-medium relative overflow-hidden;
   }
   
   .sidebar-link-active {
-    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-accent bg-blue-50/50 font-bold border border-blue-100;
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-accent bg-blue-50 font-bold border border-blue-100/50 shadow-sm shadow-blue-500/5;
+  }
+
+  /* Smooth Page Transitions */
+  .page-entry {
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 }

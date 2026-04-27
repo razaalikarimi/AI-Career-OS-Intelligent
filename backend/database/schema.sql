@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS job_requirements (
     id VARCHAR(36) PRIMARY KEY,
     job_role_id VARCHAR(36) NOT NULL,
     skill_id VARCHAR(36) NOT NULL,
-    weight TINYINT DEFAULT 1, -- Importance of the skill for this role
+    weight TINYINT DEFAULT 1,
     FOREIGN KEY (job_role_id) REFERENCES job_roles(id) ON DELETE CASCADE,
     FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE
 );
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS interview_sessions (
     id VARCHAR(36) PRIMARY KEY,
     user_id VARCHAR(36) NOT NULL,
     job_role_id VARCHAR(36) NOT NULL,
-    status ENUM('scheduled', 'ongoing', 'completed', 'cancelled') DEFAULT 'scheduled',
+    status ENUM('scheduled', 'ongoing', 'completed', 'cancelled', 'flagged') DEFAULT 'scheduled',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (job_role_id) REFERENCES job_roles(id) ON DELETE CASCADE
@@ -142,4 +142,27 @@ CREATE TABLE IF NOT EXISTS applications (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
     UNIQUE (user_id, job_id)
+);
+
+-- Proctoring Logs Table
+CREATE TABLE IF NOT EXISTS proctoring_logs (
+    id VARCHAR(36) PRIMARY KEY,
+    session_id VARCHAR(36) NOT NULL,
+    violation_type ENUM('multi_face', 'no_face', 'tab_switch', 'eye_deviation', 'voice_detected', 'virtual_camera_detected', 'device_info', 'gadget_detected') NOT NULL,
+    severity ENUM('low', 'medium', 'high') DEFAULT 'low',
+    metadata JSON,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES interview_sessions(id) ON DELETE CASCADE
+);
+
+-- Interview Evaluation Metrics Table
+CREATE TABLE IF NOT EXISTS interview_metrics (
+    id VARCHAR(36) PRIMARY KEY,
+    session_id VARCHAR(36) NOT NULL,
+    technical_score TINYINT,
+    communication_score TINYINT,
+    confidence_score TINYINT,
+    proctoring_risk_score TINYINT DEFAULT 0,
+    ai_feedback TEXT,
+    FOREIGN KEY (session_id) REFERENCES interview_sessions(id) ON DELETE CASCADE
 );

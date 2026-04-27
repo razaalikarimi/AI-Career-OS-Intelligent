@@ -44,12 +44,17 @@ const migrate = async () => {
         }
 
         // Add a default placeholder user for development
-        await pool.query(
-            "INSERT IGNORE INTO users (id, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)",
-            ['user-123-placeholder', 'demo@example.com', 'hashed_password', 'Demo User', 'user']
-        );
+        // Insert placeholder user
+        await pool.query('INSERT IGNORE INTO users (id, email, password, full_name, role) VALUES (?, ?, ?, ?, ?)', 
+            ['user-123-placeholder', 'ali@example.com', 'hashed_pw', 'Ali Raza', 'user']);
 
-        // Re-enable FK checks
+        // Insert mock job roles
+        await pool.query('INSERT IGNORE INTO job_roles (id, title, description) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?)', 
+            ['1', 'Senior Frontend Engineer', 'React and Next.js expert',
+             '2', 'Backend Systems Architect', 'Node.js and Distributed Systems expert',
+             '3', 'Full Stack Developer', 'End-to-end product developer']);
+
+        logger.info('Migration Completed Successfully!');
         await pool.query('SET FOREIGN_KEY_CHECKS = 1');
 
         logger.info('Migration Completed Successfully!');
